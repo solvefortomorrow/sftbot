@@ -142,6 +142,48 @@ async function updateLogStatusInSpreadsheet(logId, status) {
     }
 }
 
+async function loadSpreadsheetData() {
+    try {
+        const auth = new google.auth.GoogleAuth({
+            keyFile: CREDENTIALS_PATH,
+            scopes: 'https://www.googleapis.com/auth/spreadsheets',
+        });
+
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        const request = {
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Sheet1!A2:E', // Start from row 2 to exclude headers, adjust if needed
+            valueRenderOption: 'UNFORMATTED_VALUE', // Get raw values
+        };
+
+        const response = await sheets.spreadsheets.values.get(request);
+        const rows = response.data.values;
+
+        if (rows.length) {
+            rows.forEach(row => {
+                const [userId, logId, hours, link, status] = row;
+                logs[logId] = { user: userId, hours: parseInt(hours), link, status }; // Store log data
+
+                if (!userHours[userId]) {
+                    userHours[userId] = { approved: 0, denied: 0, pending: 0, claimed: 0 };
+                }
+
+                // Update user hours based on the loaded status:
+                updateUserHours(userId, status, parseInt(hours)); // Use parseInt to ensure hours are numbers
+
+
+            });
+            console.log('Spreadsheet data loaded successfully!');
+        } else {
+            console.log('No data found in spreadsheet.');
+        }
+    } catch (error) {
+        console.error('Error loading spreadsheet data:', error);
+        // Handle the error appropriately, e.g., log it and continue, or exit if critical
+    }
+}
+
 // Slash Commands Registration
 client.once("ready", async () => {
     const guild = client.guilds.cache.get(TEST_GUILD_ID);
@@ -207,6 +249,8 @@ client.once("ready", async () => {
         ]);
         console.log("Commands registered successfully.");
     }
+    console.log("Loading data from spreadsheet..."); // Indicate data loading
+    await loadSpreadsheetData(); // Load spreadsheet data when the bot starts
     console.log(`Bot is ready! Logged in as ${client.user.tag}`);
 });
 
