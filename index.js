@@ -9,7 +9,7 @@ dotenv.config();
 const TOKEN = process.env.TOKEN; // Bot token stored in .env file
 const TEST_GUILD_ID = "1312902747799945327";
 const ADMIN_ROLE_ID = "1312904258794029136";
-const LOG_CHANNEL_ID = "1316228277290930246";
+const LOG_CHANNEL_ID = "1316931712328007740";
 const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 const SPREADSHEET_ID = "1nIQwTSUspxPBEEi4FudTf4ZsGlU5Nok5oJ2jvSnC9rE";
 
@@ -348,18 +348,24 @@ client.on("interactionCreate", async (interaction) => {
     } else if (commandName === "deny") {
         const logId = options.getString("log_id");
         const log = logs[logId];
-
+    
         if (!log || log.status !== "pending") {
             await interaction.reply({ content: "Invalid or already processed log ID.", ephemeral: true });
             return;
         }
-
+    
         log.status = "denied";
         updateUserHours(log.user, "pending", -log.hours); // Deduct pending hours
         updateUserHours(log.user, "denied", log.hours); // Add to denied hours
-        await interaction.reply({ content: `Log ID: ${logId} denied successfully.`, ephemeral: true });
-        await logAction(interaction, "Deny Log", `Log ID: ${logId}, Hours: ${log.hours}`);
-
+    
+        try {
+            await updateLogStatusInSpreadsheet(logId, log.status); // Update spreadsheet
+            await interaction.reply({ content: `Log ID: ${logId} denied successfully.`, ephemeral: true });
+            await logAction(interaction, "Deny Log", `Log ID: ${logId}, Hours: ${log.hours}`);
+        } catch (error) {
+            console.error("Error updating log status (deny):", error);
+            await interaction.reply({ content: "Spreadsheet error. Please try again later.", ephemeral: true });
+        }
     } else if (commandName === "remove") {
          const hours = options.getInteger("hours");
         const userId = options.getString("user_id");
