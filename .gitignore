@@ -1,0 +1,3 @@
+git add credentials.json
+git commit -m "Add credentials.json"
+git push
