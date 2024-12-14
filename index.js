@@ -3,29 +3,16 @@ const { Client, GatewayIntentBits, Partials, Collection } = require("discord.js"
 const dotenv = require("dotenv");
 const { google } = require('googleapis');
 const path = require('path');
-const fs = require('fs');
 
-// Load Credentials from JSON
-const credentialsPath = path.join(__dirname, 'credentials.json');
-const credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf-8'));
+// Load Environment Variables
+dotenv.config();
+const TOKEN = process.env.TOKEN; // Bot token stored in .env file
+const TEST_GUILD_ID = "1312902747799945327";
+const ADMIN_ROLE_ID = "1312904258794029136";
+const LOG_CHANNEL_ID = "1316931712328007740";
+const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
+const SPREADSHEET_ID = "1nIQwTSUspxPBEEi4FudTf4ZsGlU5Nok5oJ2jvSnC9rE";
 
-// Bot Token
-const TOKEN = credentials.token;
-
-// Google Sheets API Credentials from JSON
-const GOOGLE_PROJECT_ID = credentials.google.project_id;
-const GOOGLE_PRIVATE_KEY_ID = credentials.google.private_key_id;
-const GOOGLE_PRIVATE_KEY = credentials.google.private_key;
-const GOOGLE_CLIENT_EMAIL = credentials.google.client_email;
-const GOOGLE_CLIENT_ID = credentials.google.client_id;
-const GOOGLE_AUTH_URI = credentials.google.auth_uri;
-const GOOGLE_TOKEN_URI = credentials.google.token_uri;
-const GOOGLE_AUTH_PROVIDER_X509_CERT_URL = credentials.google.auth_provider_x509_cert_url;
-const GOOGLE_CLIENT_X509_CERT_URL = credentials.google.client_x509_cert_url;
-const SPREADSHEET_ID = credentials.spreadsheetId;
-const TEST_GUILD_ID = credentials.testGuildId;
-const ADMIN_ROLE_ID = credentials.adminRoleId;
-const LOG_CHANNEL_ID = credentials.logChannelId;
 
 // Create Bot Instance
 const client = new Client({
@@ -81,27 +68,13 @@ async function listLogs(interaction, status) {
     await interaction.reply({ content: `Logs with status: ${status}\n${logList}`, ephemeral: true });
 }
 
-const getGoogleSheetsAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            project_id: GOOGLE_PROJECT_ID,
-            private_key_id: GOOGLE_PRIVATE_KEY_ID,
-            private_key: GOOGLE_PRIVATE_KEY,
-            client_email: GOOGLE_CLIENT_EMAIL,
-            client_id: GOOGLE_CLIENT_ID,
-            auth_uri: GOOGLE_AUTH_URI,
-            token_uri: GOOGLE_TOKEN_URI,
-            auth_provider_x509_cert_url: GOOGLE_AUTH_PROVIDER_X509_CERT_URL,
-            client_x509_cert_url: GOOGLE_CLIENT_X509_CERT_URL,
-        },
-        scopes: 'https://www.googleapis.com/auth/spreadsheets',
-    });
-};
-
-
 async function appendLogToSpreadsheet(logId, userId, hours, link) {
     try {
-        const auth = await getGoogleSheetsAuth();
+        const auth = new google.auth.GoogleAuth({
+            keyFile: CREDENTIALS_PATH,
+            scopes: 'https://www.googleapis.com/auth/spreadsheets',
+        });
+
         const sheets = google.sheets({ version: 'v4', auth });
 
         const request = {
@@ -125,7 +98,11 @@ async function appendLogToSpreadsheet(logId, userId, hours, link) {
 
 async function updateLogStatusInSpreadsheet(logId, status) {
     try {
-        const auth = await getGoogleSheetsAuth();
+        const auth = new google.auth.GoogleAuth({
+            keyFile: CREDENTIALS_PATH,
+            scopes: 'https://www.googleapis.com/auth/spreadsheets',
+        });
+
         const sheets = google.sheets({ version: 'v4', auth });
 
         // 1. Find the row with the matching log ID
@@ -167,8 +144,12 @@ async function updateLogStatusInSpreadsheet(logId, status) {
 
 async function loadSpreadsheetData() {
     try {
-         const auth = await getGoogleSheetsAuth();
-         const sheets = google.sheets({ version: 'v4', auth });
+        const auth = new google.auth.GoogleAuth({
+            keyFile: CREDENTIALS_PATH,
+            scopes: 'https://www.googleapis.com/auth/spreadsheets',
+        });
+
+        const sheets = google.sheets({ version: 'v4', auth });
 
         const request = {
             spreadsheetId: SPREADSHEET_ID,
@@ -177,9 +158,9 @@ async function loadSpreadsheetData() {
         };
 
         const response = await sheets.spreadsheets.values.get(request);
-         const rows = response.data.values;
+        const rows = response.data.values;
 
-         if (rows && rows.length) {
+        if (rows.length) {
             rows.forEach(row => {
                 const [userId, logId, hours, link, status] = row;
                 logs[logId] = { user: userId, hours: parseInt(hours), link, status }; // Store log data
@@ -356,7 +337,7 @@ client.on("interactionCreate", async (interaction) => {
         try {
             await updateLogStatusInSpreadsheet(logId, log.status);
             await interaction.reply({ content: `Log ID: ${logId} approved successfully.`, ephemeral: true });
-             await logAction(interaction, "Approve Log", `Log ID: ${logId}, Hours: ${log.hours}`);
+            await logAction(interaction, "Approve Log", `Log ID: ${logId}, Hours: ${log.hours}`);
 
 
         } catch (error) {
@@ -380,7 +361,7 @@ client.on("interactionCreate", async (interaction) => {
         try {
             await updateLogStatusInSpreadsheet(logId, log.status); // Update spreadsheet
             await interaction.reply({ content: `Log ID: ${logId} denied successfully.`, ephemeral: true });
-             await logAction(interaction, "Deny Log", `Log ID: ${logId}, Hours: ${log.hours}`);
+            await logAction(interaction, "Deny Log", `Log ID: ${logId}, Hours: ${log.hours}`);
         } catch (error) {
             console.error("Error updating log status (deny):", error);
             await interaction.reply({ content: "Spreadsheet error. Please try again later.", ephemeral: true });
@@ -395,7 +376,7 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         updateUserHours(userId, "approved", -hours);
-         if (userHours[userId].approved < 0) userHours[userId].approved = 0;
+        if (userHours[userId].approved < 0) userHours[userId].approved = 0;
         await interaction.reply({ content: `Removed ${hours} approved hours from <@${userId}>.`, ephemeral: true });
         await logAction(interaction, "Remove Hours", `User: <@${userId}>, Hours: ${hours}`);
 
