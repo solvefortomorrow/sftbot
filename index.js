@@ -10,9 +10,20 @@ const TOKEN = process.env.TOKEN; // Bot token stored in .env file
 const TEST_GUILD_ID = "1312902747799945327";
 const ADMIN_ROLE_ID = "1312904258794029136";
 const LOG_CHANNEL_ID = "1316931712328007740";
-const CREDENTIALS_PATH = path.join(__dirname, 'credentials.json');
 const SPREADSHEET_ID = "1nIQwTSUspxPBEEi4FudTf4ZsGlU5Nok5oJ2jvSnC9rE";
 
+
+// Google Sheets API Credentials from environment variables
+const GOOGLE_PROJECT_ID = process.env.GOOGLE_PROJECT_ID;
+const GOOGLE_PRIVATE_KEY_ID = process.env.GOOGLE_PRIVATE_KEY_ID;
+const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'); // Replace escaped newlines
+const GOOGLE_CLIENT_EMAIL = process.env.GOOGLE_CLIENT_EMAIL;
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+const GOOGLE_AUTH_URI = process.env.GOOGLE_AUTH_URI;
+const GOOGLE_TOKEN_URI = process.env.GOOGLE_TOKEN_URI;
+const GOOGLE_AUTH_PROVIDER_X509_CERT_URL = process.env.GOOGLE_AUTH_PROVIDER_X509_CERT_URL;
+const GOOGLE_CLIENT_X509_CERT_URL = process.env.GOOGLE_CLIENT_X509_CERT_URL;
+const GOOGLE_UNIVERSE_DOMAIN = process.env.GOOGLE_UNIVERSE_DOMAIN;
 
 // Create Bot Instance
 const client = new Client({
@@ -68,13 +79,28 @@ async function listLogs(interaction, status) {
     await interaction.reply({ content: `Logs with status: ${status}\n${logList}`, ephemeral: true });
 }
 
+
+const getGoogleSheetsAuth = () => {
+    return new google.auth.GoogleAuth({
+        credentials: {
+            project_id: GOOGLE_PROJECT_ID,
+            private_key_id: GOOGLE_PRIVATE_KEY_ID,
+            private_key: GOOGLE_PRIVATE_KEY,
+            client_email: GOOGLE_CLIENT_EMAIL,
+            client_id: GOOGLE_CLIENT_ID,
+            auth_uri: GOOGLE_AUTH_URI,
+            token_uri: GOOGLE_TOKEN_URI,
+            auth_provider_x509_cert_url: GOOGLE_AUTH_PROVIDER_X509_CERT_URL,
+            client_x509_cert_url: GOOGLE_CLIENT_X509_CERT_URL,
+            universe_domain: GOOGLE_UNIVERSE_DOMAIN,
+        },
+        scopes: 'https://www.googleapis.com/auth/spreadsheets',
+    });
+};
+
 async function appendLogToSpreadsheet(logId, userId, hours, link) {
     try {
-        const auth = new google.auth.GoogleAuth({
-            keyFile: CREDENTIALS_PATH,
-            scopes: 'https://www.googleapis.com/auth/spreadsheets',
-        });
-
+        const auth = await getGoogleSheetsAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
         const request = {
@@ -98,11 +124,7 @@ async function appendLogToSpreadsheet(logId, userId, hours, link) {
 
 async function updateLogStatusInSpreadsheet(logId, status) {
     try {
-        const auth = new google.auth.GoogleAuth({
-            keyFile: CREDENTIALS_PATH,
-            scopes: 'https://www.googleapis.com/auth/spreadsheets',
-        });
-
+        const auth = await getGoogleSheetsAuth();
         const sheets = google.sheets({ version: 'v4', auth });
 
         // 1. Find the row with the matching log ID
@@ -144,12 +166,8 @@ async function updateLogStatusInSpreadsheet(logId, status) {
 
 async function loadSpreadsheetData() {
     try {
-        const auth = new google.auth.GoogleAuth({
-            keyFile: CREDENTIALS_PATH,
-            scopes: 'https://www.googleapis.com/auth/spreadsheets',
-        });
-
-        const sheets = google.sheets({ version: 'v4', auth });
+         const auth = await getGoogleSheetsAuth();
+         const sheets = google.sheets({ version: 'v4', auth });
 
         const request = {
             spreadsheetId: SPREADSHEET_ID,
@@ -160,7 +178,7 @@ async function loadSpreadsheetData() {
         const response = await sheets.spreadsheets.values.get(request);
         const rows = response.data.values;
 
-        if (rows.length) {
+        if (rows && rows.length) {
             rows.forEach(row => {
                 const [userId, logId, hours, link, status] = row;
                 logs[logId] = { user: userId, hours: parseInt(hours), link, status }; // Store log data
